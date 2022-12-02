@@ -1,0 +1,202 @@
+---
+title: "Class 09 Structural Bioinformatics Pt 1"
+author: "Sindy Chavez"
+format: pdf
+editor: visual
+---
+
+## 1: Introduction to the RCSB Protein Data Bank (PDB)
+
+Skipped section 1 because the PDB site was too slow
+
+```{r}
+pdb_database <- read.csv('Data Export Summary.csv')
+pdb_database
+```
+
+
+
+## 2: Visualizing the HIV-1 protease structure
+
+# Using Mol* (pronounced molstar) to view PBD structures
+
+> Q4: Water molecules normally have 3 atoms. Why do we see just one atom per water molecule in this structure?
+
+The resolution of the image is 2A, but the the hydrogen atoms in the water molecules are smaller than the 2A resolution.
+
+> Q5: There is a critical "conserved" water molecule in the binding site. Can you identify this water molecule? What residue number does this water molecule have
+
+Yes, it interacts with residue ILE 50 on the B chain of the protein
+
+> Q6: Generate and save a figure clearly showing the two distinct chains of HIV-protease along with the ligand. You might also consider showing the catalytic residues ASP 25 in each chain and the critical water (we recommend "Ball & Stick" for these side-chains). Add this figure to your Quarto document. Discussion Topic: Can you think of a way in which indinavir, or even larger ligands and substrates, could enter the binding site?
+
+While the image shows the protein in a single configuration, proteins are actually moving all the time. The movement of the protein can cause configurations where molecules could enter the binding site.
+
+![](1HSG_and_ligand.png)
+
+> Q7: \[Optional\] As you have hopefully observed HIV protease is a homodimer (i.e. it is composed of two identical chains). With the aid of the graphic display can you identify secondary structure elements that are likely to only form in the dimer rather than the monomer?
+
+The dimer is able to form a pocket between the two chains where a molecule can bind.
+
+## 3. Introduction to Bio3D in R
+
+The 'bio3d' package for structural bioinformatics has lots of features for reading and working with biomolecular sequences and structures.
+
+```{r}
+library(bio3d)
+
+pdb <- read.pdb("1hsg")
+
+pdb
+```
+
+```{r}
+head(pdb$atom)
+```
+
+> Q7: How many amino acid residues are there in this pdb object?
+
+198
+
+> Q8: Name one of the two non-protein residues?
+
+MK1
+
+> Q9: How many protein chains are in this structure?
+
+2
+
+# Predicting functional motions of a single structure
+
+```{r}
+adk <- read.pdb("6s36")
+adk
+```
+
+Normal Mode analysis (NMA) it is a bioinformatics method for predicting functional motions. It will show us the parts of the proteins that are "flexible" (i.e. most dynamic).
+
+```{r}
+m <- nma(adk)
+plot(m)
+```
+
+Make a "movie" of this thing moving.
+
+```{r}
+mktrj(m, file="adk_nma.pdb")
+```
+
+## 4. Comparative analysis of all ADK structures
+
+Setup: Install and load the following packages in the console
+
+install.packages("bio3d") install.packages("devtools") install.packages("BiocManager")
+
+BiocManager::install("msa") devtools::install_bitbucket("Grantlab/bio3d-view")
+
+> Q10. Which of the packages above is found only on BioConductor and not CRAN?
+
+msa
+
+> Q11. Which of the above packages is not found on BioConductor or CRAN?:
+
+None, they are all found on either BioConductor or CRAN
+
+> Q12. True or False? Functions from the devtools package can be used to install packages from GitHub and BitBucket?
+
+True
+
+# Search and retrieve ADK structures
+
+First we get the sequence of ADK and use this to search the PDB database.
+
+```{r}
+aa <- get.seq("1ake_A")
+read.pdb("adk_nma.pdb")
+
+```
+
+
+> Q13. How many amino acids are in this sequence, i.e. how long is this sequence? 
+
+214
+
+
+
+
+
+```{r}
+blast <- blast.pdb(aa)
+```
+
+```{r}
+hits <- plot(blast)
+```
+
+nhit - 15 hits that have a really good e-value
+
+```{r}
+hits$pdb.id
+```
+
+What are these structures?
+
+```{r}
+head(pdb.annotate(hits$pdb.id))
+```
+
+```{r}
+files <- get.pdb(hits$pdb.id, path="pdbs", split=TRUE, gzip=TRUE)
+```
+
+The arguments make this quicker
+
+We will align and superimpose these structures.
+
+```{r}
+pdbs <- pdbaln(files, fit = TRUE, exefile="msa")
+
+```
+
+## PCA to the rescue...
+
+```{r}
+pc.xray <- pca(pdbs)
+```
+
+And plot my results
+
+```{r}
+plot(pc.xray)
+```
+
+Pairwise clustering
+
+```{r}
+rd <- rmsd(pdbs)
+
+hc.rd <- hclust(dist(rd))
+grps.rd <- cutree(hc.rd, k=3)
+
+plot(pc.xray, 1:2, col="grey50", bg=grps.rd, pch=21, cex=1)
+```
+
+
+## 5. Optional further visualization
+
+Let's make a movie
+
+```{r}
+mktrj(pc.xray, pc=1, file="pc_1.pdb")
+```
+
+
+## 6. Normal mode analysis [optional]
+
+```{r}
+modes <- nma(pdbs)
+plot(modes, pdbs, col=grps.rd)
+```
+> Q14. What do you note about this plot? Are the black and colored lines similar or different? Where do you think they differ most and why?
+
+The black and colored lines are different, though the colored lines are more similar to each other. The places where the colored lines differ most from the black line look like areas near the pocket of the protein. These residues could be important for binding a substrate.
