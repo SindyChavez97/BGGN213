@@ -1,0 +1,54 @@
+---
+title: "R Functions"
+author: "Sindy Chavez"
+format: html
+editor: visual
+---
+
+## Section 1: Improving analysis code by writing functions
+# A: Improve R code
+
+```{r}
+df <- data.frame(a=1:10, b=seq(200,400,length=10), c=11:20, d=NA)
+
+df_rows <- function(by_row){
+  (df$by_row - min(df$by_row)) / (max(df$by_row) - min(df$by_row))
+}
+
+```
+# B: Improve drug analysis code
+
+First, install bio3d
+
+```{r}
+install.packages("bio3d")
+```
+
+Second, load bio3d
+```{r}
+library("bio3d")
+```
+
+
+Now I can try improving this code
+
+Here is the original: 
+
+```{r}
+s1 <- read.pdb("4AKE") # kinase with drug
+s2 <- read.pdb("1AKE") # kinase no drug
+s3 <- read.pdb("1E4Y") # kinase with drug
+s1.chainA <- trim.pdb(s1, chain="A", elety="CA")
+s2.chainA <- trim.pdb(s2, chain="A", elety="CA")
+s3.chainA <- trim.pdb(s1, chain="A", elety="CA")
+s1.b <- s1.chainA$atom$b
+s2.b <- s2.chainA$atom$b
+s3.b <- s3.chainA$atom$b
+plotb3(s1.b, sse=s1.chainA, typ="l", ylab="Bfactor") 
+plotb3(s2.b, sse=s2.chainA, typ="l", ylab="Bfactor") 
+plotb3(s3.b, sse=s3.chainA, typ="l", ylab="Bfactor")
+```
+
+
+
+

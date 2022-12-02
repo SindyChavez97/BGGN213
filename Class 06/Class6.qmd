@@ -1,0 +1,253 @@
+---
+title: "Class06"
+author: "Sindy Chavez"
+format: pdf
+editor: visual
+toc: TRUE
+Date: 10/14/2022
+---
+
+## Function basics
+
+All functions in R have at least 3 things:
+
+-   A **name** (we pick this),
+-   Input **arguments** (there can be loads comma separated)
+-   A **body** (the R code that does the work)
+
+Write chunks of R script as you would write a paragraph. Don't write everything in one R script chunk
+
+# Q1. Write a function grade() to determine an overall grade from a vector of student homework assignment scores dropping the lowest single score
+
+> Write a function
+
+```{r}
+# Example input vectors to start with
+student1 <- c(100, 100, 100, 100, 100, 100, 100, 90)
+student2 <- c(100, NA, 90, 90, 90, 90, 97, 80)
+student3 <- c(90, NA, NA, NA, NA, NA, NA, NA)
+
+
+
+```
+
+I can use the 'mean()' function to get the average
+
+```{r}
+mean(student1)
+
+
+```
+
+I can find the lowest value with the 'min()' value
+
+```{r}
+min(student1)
+
+```
+
+'min()' function on its own is not that useful. We looked up more related functions and found 'which.min'function, what does it do?
+
+```{r}
+which.min(student1)
+
+```
+
+8 is the position of the lowest score in the vector
+
+```{r}
+student1[1:7]
+
+```
+
+Can we use the minus 'student1\[-8\]' index trick?
+
+```{r}
+student1[-8]
+```
+
+Yes, we can use it. It can exclude whatever you tell it to.
+
+```{r}
+student1[ -which.min(student1)]
+```
+
+To get the average, use the mean function on this.
+
+```{r}
+mean(student1[ -which.min(student1)])
+```
+
+What about student 2 (won't work because there is an NA in the vector)
+
+```{r}
+mean(student2[ -which.min(student2)])
+```
+
+What about student3?
+
+```{r}
+mean(student3, na.rm = T)
+```
+
+The average doesn't actually give a real answer for student2 and student3. We need to try something else.
+
+## We need another way
+
+Can I replace NA values with zero? No homework = 0
+
+```{r}
+student2
+```
+
+```{r}
+is.na(student2)
+```
+
+True is in the second position, where the NA is
+
+```{r}
+# Make NA zeros 
+student2[ is.na(student2)] <- 0
+student2
+mean(student2[ -which.min(student2)])
+```
+
+```{r}
+positions <- is.na(student3)
+student3[ positions ] <- 0
+student3
+mean(student3[ -which.min(student3)])
+```
+
+Re-write my snippet to be more simple
+
+Replace student with x, then tell R what you want x to be
+
+```{r}
+x <- student1
+
+x[ is.na(x)] <- 0
+
+mean(x[ -which.min(x)])
+
+
+```
+
+Now to make a true function
+
+```{r}
+grade <- function(x) {
+
+x[ is.na(x)] <- 0
+
+mean(x[ -which.min(x)])
+}
+```
+
+Highlight, Code, extract function, or Ctrl + Alt + X
+
+Now use that to grade student1, etc. ?
+
+```{r}
+grade(student1)
+
+```
+
+# Q2. Grade a class
+
+CSV comma separated file
+
+> Using your grade() function and the supplied gradebook . To tell you who is the top scorer in the gradebook.
+
+```{r}
+gradebook <- read.csv("https://tinyurl.com/gradeinput",
+row.names = 1)
+head(gradebook)
+```
+
+Now I want to introduce the 'apply()' function. Appplies functions to whatever data that you want to look at
+
+apply(x,margin,fun) x=the thing we want to grade (here it's gradebook) margin=1 or 2 for either rows or columns (reads things either by row or column, row=you get the avg for each student, column=you get the average for each homework, dropping the lowest score each time because that's what our function does) fun=funtion
+
+```{r}
+apply(gradebook, 1, grade)
+
+apply(gradebook, 2, grade)
+
+
+```
+
+Question 2 answer
+
+```{r}
+results <- apply(gradebook, 1, grade)
+results
+
+```
+
+I can use the 'which.max()' to find where the largest/max value is in this results vector
+
+```{r}
+which.max(results)
+
+```
+
+which.max only returns one highest score, unlike the sort function, which will return more than one if there was more than one high score
+
+# Q3 Which homework was the toughest on students (aka lowest scores)
+
+We want to use 'apply()' and look at the columns, but without dropping the lowest grades
+
+```{r}
+homeworks <- apply(gradebook, 2, sum, na.rm=TRUE)
+homeworks
+
+
+```
+
+The lowest score
+
+```{r}
+which.min(homeworks)
+
+
+```
+
+# Q4 *Optional Extension* Which Homework was most predictive of overall score?
+
+
+The highest score
+
+```{r}
+which.max(homeworks)
+
+```
+
+Looking at the lowest and highest scoring homeworks can give the instructor insight as to which homeworks were good (students could score highly) and bad (all students did poorly)
+
+Pearson correlation cor(x, y)
+
+plots things x vs y
+
+```{r}
+mask <- gradebook
+mask[ is.na(mask) ] <- 0
+
+
+cor(mask$hw5, results)
+
+
+```
+
+Can I apply the 'cor()'function ovver the masked gradebook? Sure!
+
+```{r}
+
+apply(mask,2, cor, y=results)
+```
+
+# Q5 Can we render this page?
+Aparently yes
+
+
