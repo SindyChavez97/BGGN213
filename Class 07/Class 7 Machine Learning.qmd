@@ -1,0 +1,310 @@
+---
+title: "Class 7: Machine Learning"
+author: "Sindy Chavez"
+format: pdf
+editor: visual
+---
+
+# K-means Clustering
+
+Let's make up some data to cluster. 
+
+```{r}
+x <- rnorm(3000, 3)
+# Random distribution of numbers, in a normal distribution
+hist(x)
+#This one is centered around 0
+# Adding *, 3* results in the center of the histogram moving to 3, instead of 0 which is the default
+
+```
+
+One set clustered around +3 and one around -3
+```{r}
+rnorm(30, 3)
+rnorm(30, -3)
+
+```
+
+Plot x colored by the kmeans cluster assignment and add cluster centers as blue points
+
+
+```{r}
+tmp <- c(rnorm(30, -3), rnorm(30,3))
+x <- cbind(x=tmp, y=rev(tmp))
+# rev - reverses the vector
+# colors can also be numbers, 1 is black, 2 is red, etc
+# cluster is indicated by 'cluster' so you can ask each to be colored differently
+plot(x)
+
+
+#plot(x, col=x$cluster)
+plot(x, col=c("blue", "brown"))
+
+# colors the dots alternating blue and brown, not very helpful
+
+
+plot(x, col=c(rep(1,30), rep(2,30)))
+
+
+
+```
+
+
+
+
+
+
+
+
+
+> Q. The function to do k-means clustering in base R is called 'kmeans()'. We give this our input data for clustering the the number of clusters we want 'centers'.
+
+```{r}
+km <- kmeans(x, centers=4, nstart = 20)
+km
+# kmeans() needs two arguments, x and centers
+# nstart if centers is a number, how many random sets should be chosen, not sure what that means
+# clustering vector is which cluster the item is in, I'm not really sure what it means
+# Always uses euclidean distance matrix(something about hypotenuses)
+```
+
+
+
+```{r}
+km$size
+```
+
+> Q. What component of your result object
+
+ - 
+
+```{r}
+km$cluster
+
+```
+
+ - cluster centers
+ 
+```{r}
+km
+```
+ 
+
+
+More plot coloring
+
+```{r}
+plot(x, col=km$cluster)
+points(km$centers, col="blue", pch=15, cex=1.5)
+# pch made a square
+# cex determines size of the points
+
+
+```
+
+The 'hclust()' function performs hierarchical clustering. The big advantage here is I don't need to tell it "k" the number of clusters
+To run 'hclust()'I need to provide a distance matrix as input (not the original data)
+```{r}
+hc <- hclust(dist(x))
+
+#only d (the dissimilarity structure) is a needed argument for this function
+#function computes distance between the rows of data, only needs the argument x
+#euclidean distance matrix
+```
+
+
+
+```{r}
+plot(hc)
+abline(h=8, col="red", lty=2)
+```
+Pay attention the the lines going across in the dendrograms
+Shows structure in the data
+
+To get my "main" result (cluster membership) I want to "cut" this tree to yield "branches"
+
+```{r}
+cutree(hc, h=8)
+# Cuts a tree, e.g., as resulting from hclust, into several groups either by specifying the desired number(s) of groups or the cut height(s)
+```
+
+More often we will use 'cutree()' with k=2 for example
+
+```{r}
+grps <- cutree(hc, k=3)
+
+# k=2 : give me a cut to yield 2 trees
+```
+
+Make a plot of our 'hclust()" results ie our data colored by color assignment!
+
+```{r}
+plot(x, col=grps)
+```
+
+
+# Principal Component Analysis (PCA)
+family of multivariate analysis methods
+pc1 will capture more variance than pc2
+
+
+## Read data for UK food trends from online
+
+```{r}
+url <- "https://tinyurl.com/UK-foods"
+x <- read.csv(url, row.names=1)
+```
+
+
+Check the data! Always check the data!
+```{r}
+head(x)
+```
+
+## Q1. How many rows and columns are in your new data frame named x? What R functions could you use to answer this questions?
+
+```{r}
+nrow(x)
+ncol(x)
+dim(x)
+
+```
+
+
+
+rownames(x) <- x[,1]
+x <- x[,-1]
+head(x)
+- Don't use this, this just deletes the column, eventually you get an error
+- What we want to do is change the list of foods to be the title of the rows
+
+```{r}
+x <- read.csv(url, row.names=1)
+head(x)
+```
+
+
+```{r}
+dim(x)
+```
+
+## Q2. Which approach to solving the ‘row-names problem’ mentioned above do you prefer and why? Is one approach more robust than another under certain circumstances?
+
+I prefer the second approach, 'row.names=1' because it explicitly states that the first row is just the name of row. The first approach just deletes a row, and if the code is run again, the first row will be deleted again, resulting in a loss of data.
+
+
+
+## Spotting major differences and trends
+
+Explore the data, basically plot, then plot again.
+
+## Q3: Changing what optional argument in the above barplot() function results in the following plot?
+
+```{r}
+barplot(as.matrix(x), beside=T, col=rainbow(nrow(x)))
+```
+
+
+To change the plot above into a stacked bar plot: 
+
+```{r}
+barplot(as.matrix(x), beside=F, col=rainbow(nrow(x)))
+```
+
+Instead of placing the bars beside each other (beside=T), they are placed on top of one another (beside=F)
+
+
+
+## Q5: Generating all pairwise plots may help somewhat. Can you make sense of the following code and resulting figure? What does it mean if a given point lies on the diagonal for a given plot?
+
+A "pairs" plot is somewhat useful, but there is a lot of repetition.
+
+```{r}
+
+pairs(x, col=rainbow(10), pch=16)
+```
+
+```{r}
+log2(20/10)
+```
+
+We use log2 because it has to do with doubling. (Doubling in biology is interesting?)
+
+
+## Q6. What is the main differences between N. Ireland and the other countries of the UK in terms of this data-set?
+
+The blue dot, which is alcohol drinks I think, is different from the other countries of the UK.
+
+
+## PCA to the rescue
+
+The main function in base R to do PCA is called 'prcomp()'. One issue with the 'prcomp()' function is that it expects the transpose of our data as input.
+
+```{r}
+pca <- prcomp(t(x))
+summary(pca)
+```
+
+Cumulative proportion, adds the PCs across the row, tells you how much of the data is captured.
+
+
+
+The object returned by 'prcomp()' has our results that include a $Food component. This is our "scores" along the PCs (ie the plot of our data along the new PC axis).
+
+## Q7. Complete the code below to generate a plot of PC1 vs PC2. The second line adds text labels over the data points.
+
+```{r}
+plot(pca$x[,1], pca$x[,2], xlab="PC1", ylab="PC2", xlim=c(-270,500))
+text(pca$x[,1], pca$x[,2], colnames(x))
+```
+
+
+
+## Q8. Customize your plot so that the colors of the country names match the colors in our UK and Ireland map and table at start of this document.
+
+```{r}
+plot(pca$x[,1], pca$x[,2],
+     xlab="PC1", ylab="PC2",
+     col=c("orange", "red", "blue", "darkgreen", 
+           pch=16))
+```
+
+Variation in the original data
+```{r}
+v <- round( pca$sdev^2/sum(pca$sdev^2) * 100 )
+v
+
+```
+Coverage of the PCA (I think)
+```{r}
+z <- summary(pca)
+z$importance
+```
+
+Bar graph of variance
+
+```{r}
+barplot(v, xlab="Principal Component", ylab="Percent Variation")
+```
+
+## Digging deeper (variable loadings)
+
+Consider the influence of the original variables on the PCAs
+
+```{r}
+par(mar=c(10, 3, 0.35, 0))
+barplot( pca$rotation[,1], las=2 )
+```
+
+
+## Q9: Generate a similar ‘loadings plot’ for PC2. What two food groups feature prominantely and what does PC2 maninly tell us about?
+
+Fresh potatoes are very positive and soft drinks are very negative.
+
+PC2 tells us the variance above and below the length of the variance set by PC1. 
+
+```{r}
+par(mar=c(10, 3, 0.35, 0))
+barplot( pca$rotation[,2], las=2 )
+```
+
