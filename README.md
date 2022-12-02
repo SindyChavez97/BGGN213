@@ -1,6 +1,6 @@
 # BGGN213: Bioinformatics
 
-My classwork for [Bioinformatics Class16] (https://bioboot.github.io/bggn213_F22/) at UC San Diego.
+My classwork for [Bioinformatics Class16](https://bioboot.github.io/bggn213_F22/) at UC San Diego.
 
 - Class 04: Introduction to R  
 
