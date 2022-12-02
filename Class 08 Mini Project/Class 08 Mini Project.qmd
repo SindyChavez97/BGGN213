@@ -1,0 +1,238 @@
+---
+title: "Class 08 Mini-Project"
+author: "Sindy Chavez"
+format: pdf
+editor: visual
+---
+
+# Unsupervised learning analysis of breast cancer cells
+
+First I need to get the data. This comes from the University Of Wisconsin and lives online here;
+
+It has been downloaded onto my computer in the same file as the class 08 mini project
+
+```{r}
+
+wisc.df <- read.csv("WisconsinCancer.csv", row.names = 1)
+head(wisc.df)
+dim(wisc.df)
+
+```
+
+How could we get rid of this expert 'diagnosis' column.
+
+```{r}
+wisc.data <- wisc.df[,-1]
+diagnosis <- as.factor(wisc.df$diagnosis)
+
+```
+
+> Q1. How many individuals (i.e. samples/rows)?
+
+```{r}
+nrow(wisc.df)
+```
+
+> Q2. How many "cancer" M samples are there?
+
+```{r}
+table(wisc.df$diagnosis)
+```
+
+> Q3. How many variables/features in the data are suffixed with \_mean?
+
+The 'grep()' function would be useful.
+
+```{r}
+colnames(wisc.data)
+
+```
+
+Ask for '\_mean' pattern withinin the columns (colnames(wisc.data))
+
+```{r}
+match.positions <- grep("_mean", colnames(wisc.data))
+length(match.positions)
+```
+
+## Principal Component Analysis (PCA)
+
+Let's try PCA on this data to see what major features might be hidden in this high dimensional data that are hard to see any other way.
+
+The function 'prcomp()' is useful, but you need to change the default 'scale()' from FALSE to TRUE so that R can change the scales and make it easier to compare the data as apples to apples
+
+Do we need to "scale" this data before PCA? We look at the mean and sd of the variables (i.e. columns)
+
+If the units of the data are already the same, you shouldn't have to scale
+
+```{r}
+round(apply(wisc.data, 2, sd), 2)
+```
+
+```{r}
+wisc.pr <- prcomp(wisc.data, scale=TRUE)
+summary(wisc.pr)
+```
+
+> Q4. From your results, what proportion of the original variance is captured by the first principal components (PC1)?
+
+0.4427
+
+> Q5. How many principal components (PCs) are required to describe at least 70% of the original variance in the data?
+
+3
+
+> Q6. How many principal components (PCs) are required to describe at least 90% of the original variance in the data?
+
+7
+
+```{r}
+biplot(wisc.pr)
+```
+
+> Q7. What stands out to you about this plot? Is it easy or difficult to understand? Why?
+
+It has all the dimensions, but is too messy to read because there are too many labels.
+
+```{r}
+plot(wisc.pr)
+```
+
+One of our main results from methods like PCA is a so called "score plots" a.k.a. "PC plots", "ordination plots", "PC1 vs PC2", etc. Let's make one ourselves...
+
+```{r}
+plot(wisc.pr$x[,1], wisc.pr$x[,2], col=diagnosis, xlab="PC1", ylab="PC2")
+```
+
+Each dot in the plot is a person You can almost draw a line between benign and malignant tumors
+
+PCA is a method for compressing a lot of data into something that captures the essence of the original data
+
+Takes a data set with lots of dimensions and flattens it to 2 or 3 dimensions(I think it said dimensions? - try looking at Lecture Notes)
+
+The new rotated axes describe the Principal components - from drawing new axes along the data (if the data has a general correlation)
+
+> Q8. Generate a similar plot for principal components 1 and 3. What do you notice about these plots?
+
+```{r}
+plot(wisc.pr$x[,1], wisc.pr$x[,3], col=diagnosis, xlab="PC1", ylab="PC3")
+```
+
+The two plots look very similar. Both the PC1vPC2 and PC1vPC3 have somewhat clear clusters, but there is more overlap between the clusters in the PC1vPC3 plot.
+
+> Q9. For the first principal component, what is the component of the loading vector (i.e. wisc.pr\$rotation\[,1\]) for the feature concave.points_mean? This tells us how much this original feature contributes to the first PC.
+
+I think this is the point where most of the variance has been captured. I think it's also called the 'elbow' or 'scree'.
+
+## Hierarchical clustering
+
+Kinda sucks but here is goes
+
+```{r}
+data.scaled <- scale(wisc.data)
+data.dist <- dist(data.scaled)
+wisc.hclust <- hclust(data.dist)
+plot(wisc.hclust)
+abline(h=20, col="red", lty=2)
+```
+
+Not much structure in the original data, trying to cut with the 'cutree()" function only leads to a mess.
+
+> Q10. Using the plot() and abline() functions, what is the height at which the clustering model has 4 clusters?
+
+Height 20
+
+> Using different methods 
+
+> Q12. Which method gives your favorite results for the same data.dist dataset? Explain your reasoning.
+
+I tried the 'ward.D2' method later and it created a cleaner dendrogram where it was easier to see how the data might cluster.
+
+## Combining methods
+
+Clustering on PCA results
+
+PCA is often used as a first step in further analysis. Here we will combine PCA and clustering.
+
+We have our PCA results 'wisc.pr\$x'
+
+wisc.pr\$x\[,1:3\]
+
+
+
+```{r}
+summary(wisc.pr$x[,1:3])
+```
+
+```{r}
+wisc.pr.hclust <- hclust( dist(wisc.pr$x[,1:3]), method="ward.D2")
+
+plot(wisc.pr.hclust)
+```
+```{r}
+grps <- cutree(wisc.pr.hclust, k=2)
+table(grps)
+```
+
+```{r}
+plot(wisc.pr$x[,1:2], col=grps)
+
+```
+
+The colors in the plot above are reversed from the original colors we had for malignant and benign. 
+Let's flip the colors
+
+Color diagnosis instead of grps
+
+```{r}
+plot(wisc.pr$x[,1:2], col=diagnosis)
+```
+
+
+
+
+
+
+
+
+
+
+
+> Q13. How well does the newly created model with four clusters separate out the two diagnoses?
+
+
+```{r}
+
+table(diagnosis,grps)
+```
+
+The model does a pretty good job of making two groups where most of group 1 aligns with a *malignant* diagnosis and most of group 2 aligns with a *benign* diagnosis.
+
+
+
+
+```{r}
+wisc.pr.hclust.clusters <- cutree(wisc.pr.hclust, k=2)
+table(wisc.pr.hclust.clusters, diagnosis)
+
+```
+
+
+## Prediction
+
+```{r}
+url <- "https://tinyurl.com/new-samples-CSV"
+new <- read.csv(url)
+npc <- predict(wisc.pr, newdata=new)
+npc
+```
+```{r}
+plot(wisc.pr$x[,1:2], col=diagnosis)
+points(npc[,1], npc[,2], col="blue", pch=16, cex=3)
+text(npc[,1], npc[,2], c(1,2), col="white")
+```
+
+
+> Q16. Which of these new patients should we prioritize for follow up based on your results?
+
+Patient 2
