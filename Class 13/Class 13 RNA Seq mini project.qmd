@@ -1,0 +1,270 @@
+---
+title: "Class 13 RNA Seq"
+author: "Sindy Chavez"
+format: pdf
+editor: visual
+---
+
+## Background
+
+We will do all the following:
+
+- Read countData and colData
+- Check and fix countData if required
+- DESeq Analysis
+- Visualization
+- Gene Annotation
+- Pathway Analysis
+
+### About the data
+
+The data for for hands-on session comes from GEO entry: GSE37704, which is associated with the following publication:
+
+Trapnell C, Hendrickson DG, Sauvageau M, Goff L et al. "Differential analysis of gene regulation at transcript resolution with RNA-seq". Nat Biotechnol 2013 Jan;31(1):46-53. PMID: 23222703
+
+## 1. Read countData and colData
+
+We need at least two things for this tupe of analysis:
+
+- countData
+- colData (a.k.a. Metadata)
+
+```{r}
+colData <- read.csv("GSE37704_metadata.csv", row.names = 1)
+colData
+```
+```{r}
+countData <- read.csv("GSE37704_featurecounts.csv", row.names = 1)
+head(countData)
+```
+
+
+
+
+## 2. Fix countData
+
+> Q. Complete the code below to remove the troublesome first column from countData
+
+length is in the first column position, and we need to get rid of it. You can do [,-1], but don't run many times or you risk removing the first column over and over again
+
+
+```{r}
+countData <- as.matrix(countData[,-1])
+head(countData)
+```
+
+
+Make sure that the data in CountData match the metadata
+
+```{r}
+all(rownames(colData)==colnames(countData))
+```
+
+All looks good apart from all those zero count genes!! We should remove these before doing any testing.
+
+> Q. Complete the code below to filter countData to exclude genes (i.e. rows) where we have 0 read count across all samples (i.e. columns).
+
+We can sum across the rows and if we get a zero then we have no counts in any exp for a given gene. 
+
+```{r}
+keep.inds <- rowSums(countData)!=0
+counts <- countData[keep.inds, ]
+```
+
+```{r}
+nrow(counts)
+```
+# QC with PCA
+
+The 'prcomp()' function in base R is often used to check the 
+
+```{r}
+pca <- prcomp(t(counts), scale. = TRUE)
+summary(pca)
+```
+
+Our PCA score plot (a.k.a. PC1 vs PC2)
+
+```{r}
+plot(pca$x[,1], pca$x[,2], col=as.factor(colData$condition), pch=16)
+```
+
+
+## 3. DESeq
+
+```{r, message=FALSE} 
+library(DESeq2)
+```
+
+
+First I need to setup the input object required by DESeq
+
+```{r, message=FALSE}
+dds <- DESeqDataSetFromMatrix(countData = counts,
+                              colData=colData,
+                              design=~condition)
+dds <- DESeq(dds)
+res <- results(dds)
+head(res)
+```
+
+> Q. Call the summary() function on your results to get a sense of how many genes are up or down-regulated at the default 0.1 p-value cutoff.
+
+```{r}
+summary(res)
+```
+
+> Q. Improve this plot by completing the below code, which adds color and axis labels
+
+```{r}
+mycols <- rep("gray", nrow(counts))
+mycols[res$log2FoldChange > 2] <- "blue"
+mycols[res$log2FoldChange < -2] <- "blue"
+mycols[res$padj > 0.05] <- "gray"
+
+plot(res$log2FoldChange, -log(res$padj), col=mycols)
+abline(v=c(-2,+2))
+```
+
+
+## 4. Add Gene Annotation
+
+```{r}
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+```
+
+> Q. Use the mapIDs() function multiple times to add SYMBOL, ENTREZID and GENENAME annotation to our results by completing the code below.
+
+I will use the 'mapIDs()' to add SYMBOL and ENTREZID annotation to our results.
+
+
+```{r}
+columns(org.Hs.eg.db)
+```
+
+```{r}
+res$symbol <- mapIds(org.Hs.eg.db, 
+                     keys = rownames(counts),
+                     keytype = "ENSEMBL",
+                     column = "SYMBOL")
+```
+
+```{r}
+res$entrez <- mapIds(org.Hs.eg.db, 
+                     keys = rownames(counts),
+                     keytype = "ENSEMBL",
+                     column = "ENTREZID")
+```
+
+```{r}
+res$genename <- mapIds(org.Hs.eg.db, 
+                     keys = rownames(counts),
+                     keytype = "ENSEMBL",
+                     column = "GENENAME")
+```
+
+```{r}
+head(res)
+```
+
+> Q. Finally for this section let's reorder these results by adjusted p-value and save them to a CSV file in your current project directory.
+
+```{r}
+res = res[order(res$pvalue),]
+write.csv(res,file = "deseq_results.csv")
+```
+
+
+## 5. Pathway Analysis or Gene Set Enrichment
+
+We can use 'gage()' with KEGG and GO
+```{r, message=FALSE}
+library(gage)
+library(gageData)
+library(pathview)
+```
+
+What 'gage()' wants as input is that vector of importance - in our case that will be the log2 fold-change values. This vector should have 'names()' that are entrez IDs. 
+
+```{r}
+foldchange <- res$log2FoldChange
+names(foldchange) <- res$entrez
+```
+
+And run gage with KEGG Human set
+
+```{r}
+#Focus on signaling and metabolic pathways only
+data("kegg.sets.hs")
+data("sigmet.idx.hs")
+kegg.sets.hs = kegg.sets.hs[sigmet.idx.hs]
+
+keggres = gage(foldchange, gsets = kegg.sets.hs)
+```
+
+```{r}
+head(keggres$less, 5)
+```
+
+Let's have a closer look at one of these pathways and our intersecting genes
+
+hsa04110 Cell cycle 
+
+
+```{r}
+pathview(gene.data = foldchange, pathway.id = "hsa04110")
+```
+
+![](hsa04110.pathview.png)
+
+
+## 6. Gene Ontology (GO)
+
+```{r}
+data(go.sets.hs)
+data(go.subs.hs)
+
+# Focus on Biological Process subset of GO
+gobpsets = go.sets.hs[go.subs.hs$BP]
+
+gobpres = gage(foldchange, gsets=gobpsets, same.dir=TRUE)
+
+head(gobpres$less)
+```
+
+
+
+
+# Reactome Analysis
+
+We can use the online version for a fancy display
+
+```{r}
+sig_genes <- res[res$padj <= 0.05 & !is.na(res$padj), "symbol"]
+print(paste("Total number of significant genes:", length(sig_genes)))
+```
+```{r}
+#sig_genes
+```
+
+```{r}
+write.table(sig_genes, file="significant_genes.txt", row.names=FALSE, col.names=FALSE, quote=FALSE)
+```
+
+> Q: What pathway has the most significant “Entities p-value”? Do the most significant pathways listed match your previous KEGG results? What factors could cause differences between the two methods?
+
+Endosomal/Vacuolar pathway
+No 
+
+
+
+
+
+
+
+
+
+
+
+
