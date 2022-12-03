@@ -1,0 +1,244 @@
+---
+title: "Class 12"
+author: "Sindy Chavez"
+format: html
+editor: visual
+---
+
+## 1. Bioconductor and DESeq2 setup
+
+
+```{r, message=FALSE, warning=FALSE}
+
+library(BiocManager)
+library(DESeq2)
+
+```
+
+# Input Data
+We need at least two things: 
+- count data (genes in rows and exp in cols)
+- metadata (a.k.a. 'colData')
+
+## 2. Import countData and colData
+
+
+```{r}
+counts <- read.csv("airway_scaledcounts.csv", row.names=1)
+metadata <-  read.csv("airway_metadata.csv")
+
+```
+
+
+
+Let's take a quick look at 'counts' and 'metadata'
+
+```{r}
+head(counts)
+head(metadata)
+```
+
+
+> Q1. How many genes are in this dataset? 
+
+
+```{r}
+nrow(counts)
+```
+
+
+
+> Q2. How many ‘control’ cell lines do we have? 
+
+
+```{r}
+metadata$dex
+```
+
+
+
+
+## 3. Toy differential gene expression 
+We need to make sure that the metadata (i.e. colData) and our counts match!
+
+
+```{r}
+metadata$id
+```
+
+```{r}
+colnames(counts)
+```
+
+
+
+We can use the '==' test for equality. Basically is the bit on the right the same as the bit on the left of the == sign.
+
+
+```{r}
+colnames(counts)==metadata$id
+```
+
+
+We can use the 'all()' function to check if al the inputs are TRUE.
+
+
+```{r}
+all(colnames(counts)==metadata$id)
+```
+
+# Find the mean count values per gene for control samples
+
+
+```{r}
+control.inds <- metadata$dex == "control"
+control.ids <- metadata[control.inds,"id"]
+control.counts <- counts[,control.ids]
+head(control.counts)
+
+```
+
+
+We want a mean value acress these rows (ie a mean count per gene)
+
+
+```{r}
+control.mean <- rowMeans(control.counts)
+head(control.mean)
+```
+
+
+
+
+
+# Find the mean count values per gene for treated samples
+
+
+```{r}
+treated.inds <- metadata$dex == "treated"
+treated.ids <- metadata[treated.inds,"id"]
+treated.counts <- counts[,treated.ids]
+head(treated.counts)
+```
+
+```{r}
+treated.mean <- rowMeans(treated.counts)
+head(treated.mean)
+```
+
+
+or
+ 
+you can use this chunk:'treated.mean <- rowMeans(counts[, metadata[metadata$dex == 'treated',]$id])' it's just too hard to read
+combine control.mean and treated. means into a data.frame
+
+
+```{r}
+meancounts <- data.frame(control.mean, treated.mean)
+```
+
+> Q3. How would you make the above code in either approach more robust?
+
+> Q4. Follow the same procedure for the treated samples (i.e. calculate the mean per gene across drug treated samples and assign to a labeled vector called treated.mea
+
+# Quick plot
+ 
+
+```{r}
+plot(meancounts)
+```
+
+
+This kind of heavily skewed data screams at you to log transform!
+
+
+```{r}
+plot(meancounts, log="xy")
+```
+
+
+
+# Log2 transforms are very useful!
+
+
+
+```{r}
+meancounts$log2fc <- log2(meancounts$treated.mean / meancounts$control.mean)
+```
+
+```{r}
+head(meancounts)
+```
+
+
+
+I want to get rid of any zero count genes - I can't say anythings about these genes and this drug treatment anyway.
+
+
+```{r}
+to.keep.inds <- rowSums(meancounts[,1:2]==0) ==0
+mycounts <- meancounts[to.keep.inds,]
+head(mycounts)
+```
+
+
+
+How many genes do we have left?
+
+
+```{r}
+nrow(mycounts)
+```
+
+
+
+How many genes are "up" regulated at a threshold log2-fold-change of +2 or greater
+
+
+```{r}
+sum(mycounts$log2fc >=2)
+```
+
+
+
+
+# Time to do things the way the rest of the workd do them
+
+With DESeq2
+
+It wants counts and colData and the "design" what to compare to what.
+
+
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = counts,
+                              colData = metadata,
+                              design = ~dex)
+```
+
+```{r}
+dds <- DESeq(dds)
+res <- results(dds)
+```
+
+```{r}
+head(res)
+```
+
+
+
+To keep both our inner biologist and inner nerd happy we often view our data in plots of log2 fold change vs p-value
+
+
+```{r}
+plot(res$log2FoldChange, res$padj)
+```
+
+
+
+We can take the log of the p-value to help us here again.
+
+
+```{r}
+plot(res$log2FoldChange, -log(res$padj))
+```
+

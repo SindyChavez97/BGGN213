@@ -1,0 +1,416 @@
+---
+title: "Class 12"
+author: "Sindy Chavez"
+format: html
+editor: visual
+toc: TRUE
+---
+
+## 1. Bioconductor and DESeq2 setup
+
+```{r, message=FALSE, warning=FALSE}
+
+library(BiocManager)
+library(DESeq2)
+
+```
+
+# Input Data
+
+We need at least two things: - count data (genes in rows and exp in cols) - metadata (a.k.a. 'colData')
+
+## 2. Import countData and colData
+
+```{r}
+counts <- read.csv("airway_scaledcounts.csv", row.names=1)
+metadata <-  read.csv("airway_metadata.csv")
+
+```
+
+Let's take a quick look at 'counts' and 'metadata'
+
+```{r}
+head(counts)
+head(metadata)
+```
+
+> Q1. How many genes are in this dataset?
+
+```{r}
+nrow(counts)
+```
+
+> Q2. How many 'control' cell lines do we have?
+
+```{r}
+metadata$dex
+```
+
+## 3. Toy differential gene expression
+
+We need to make sure that the metadata (i.e. colData) and our counts match!
+
+```{r}
+metadata$id
+```
+
+```{r}
+colnames(counts)
+```
+
+We can use the '==' test for equality. Basically is the bit on the right the same as the bit on the left of the == sign.
+
+```{r}
+colnames(counts)==metadata$id
+```
+
+We can use the 'all()' function to check if al the inputs are TRUE.
+
+```{r}
+all(colnames(counts)==metadata$id)
+```
+
+# Find the mean count values per gene for control samples
+
+```{r}
+control.inds <- metadata$dex == "control"
+control.ids <- metadata[control.inds,"id"]
+control.counts <- counts[,control.ids]
+head(control.counts)
+
+
+```
+
+We want a mean value acress these rows (ie a mean count per gene)
+
+```{r}
+control.mean <- rowMeans(control.counts)
+head(control.mean)
+```
+
+# Find the mean count values per gene for treated samples
+
+> Question 4
+
+```{r}
+treated.inds <- metadata$dex == "treated"
+treated.ids <- metadata[treated.inds,"id"]
+treated.counts <- counts[,treated.ids]
+head(treated.counts)
+```
+
+```{r}
+treated.mean <- rowMeans(treated.counts)
+head(treated.mean)
+```
+
+or
+
+you can use this chunk:'treated.mean \<- rowMeans(counts\[, metadata\[metadata$dex == 'treated',]$id\])' it's just too hard to read combine control.mean and treated. means into a data.frame
+
+```{r}
+meancounts <- data.frame(control.mean, treated.mean)
+```
+
+> Q3. How would you make the above code in either approach more robust?
+
+In the original instructions we divided the 'rowSums' by 4, but to make the approach more robust we can divid by the number of rows, instead of 4, or we can find the means by using 'rowMeans'
+
+> Q4. Follow the same procedure for the treated samples (i.e. calculate the mean per gene across drug treated samples and assign to a labeled vector called treated.mean)
+
+See above
+
+> Q5 (a). Create a scatter plot showing the mean of the treated samples against the mean of the control samples.
+
+# Quick plot (Q5a)
+
+```{r}
+plot(meancounts)
+```
+
+> Q5 (b).You could also use the ggplot2 package to make this figure producing the plot below. What geom\_?() function would you use for this plot?
+
+```{r}
+library(ggplot2)
+ggplot(meancounts) +
+  aes(treated.mean, control.mean) +
+  geom_point()
+```
+
+> Q6. Try plotting both axes on a log scale. What is the argument to plot() that allows you to do this?
+
+This kind of heavily skewed data screams at you to log transform!
+
+```{r}
+plot(meancounts, log="xy")
+```
+
+```{r}
+zero.vals <- which(meancounts[,1:2]==0, arr.ind=TRUE)
+
+to.rm <- unique(zero.vals[,1])
+mycounts <- meancounts[-to.rm,]
+head(mycounts)
+```
+
+> Q7. What is the purpose of the arr.ind argument in the which() function call above? Why would we then take the first column of the output and need to call the unique() function?
+
+arr.ind tells us which genes have 0 values (which we can't use and want to get rid of).
+
+I think the unique function makes sure we don't count a zero row twice if it has zeros in more thn one column.
+
+# Log2 transforms are very useful!
+
+```{r}
+meancounts$log2fc <- log2(meancounts$treated.mean / meancounts$control.mean)
+```
+
+```{r}
+head(meancounts)
+```
+
+I want to get rid of any zero count genes - I can't say anythings about these genes and this drug treatment anyway.
+
+```{r}
+to.keep.inds <- rowSums(meancounts[,1:2]==0) ==0
+mycounts <- meancounts[to.keep.inds,]
+head(mycounts)
+```
+
+How many genes do we have left?
+
+```{r}
+nrow(mycounts)
+```
+
+How many genes are "up" regulated at a threshold log2-fold-change of +2 or greater
+
+```{r}
+sum(mycounts$log2fc >=2)
+```
+
+```{r}
+up.ind <- mycounts$log2fc > 2
+down.ind <- mycounts$log2fc < (-2)
+sum(up.ind)
+sum(down.ind)
+```
+
+> Q8. Using the up.ind vector above can you determine how many up regulated genes we have at the greater than 2 fc level?
+
+250
+
+> Q9. Using the down.ind vector above can you determine how many down regulated genes we have at the greater than 2 fc level?
+
+367
+
+> Q10. Do you trust these results? Why or why not?
+
+Not yet, we don't have any statistical analysis on the data to see if those changes are significant
+
+## 4. DESeq2 analysis
+
+> Time to do things the way the rest of the workd do them
+
+With DESeq2
+
+
+
+```{r}
+library(DESeq2)
+citation("DESeq2")
+```
+
+It wants counts and colData and the "design" what to compare to what.
+
+
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = counts,colData = metadata, design = ~dex)
+```
+
+```{r}
+dds <- DESeq(dds)
+res <- results(dds)
+```
+
+```{r}
+head(res)
+```
+
+To keep both our inner biologist and inner nerd happy we often view our data in plots of log2 fold change vs p-value
+
+```{r}
+plot(res$log2FoldChange, res$padj)
+```
+
+We can take the log of the p-value to help us here again.
+
+```{r}
+plot(res$log2FoldChange, -log(res$padj),
+     xlab="log2 Fold-Change",
+     ylab="Minus Log p-value")
+abline(v=c(-2,2), col="red")
+abline(h= -log(0.05), col="red")
+
+```
+
+
+## 5. Adding annotation data
+Revisiting Gene annotation
+
+```{r}
+library("AnnotationDbi")
+library("org.Hs.eg.db")
+```
+
+
+I am going to use the 'mapIds()' function to "map" gene identifiers between different databases.
+
+
+What databases are available to map between here in the "org.Hs.eg.db"?
+
+```{r}
+columns(org.Hs.eg.db)
+```
+
+Let's map to gene symbol first
+Let's have a little look at our results again:
+
+```{r}
+head(res)
+```
+
+
+
+
+multiVals - has the ability to return all the isoforms available for the gene; the default is to take the first (becuase some genes have lots of isoforms)
+
+
+```{r}
+res$symbol <- mapIds(org.Hs.eg.db,
+                     keys=row.names(res), # Our genenames
+                     keytype="ENSEMBL",        # The format of our genenames
+                     column="SYMBOL",          # The new format we want to add
+                     multiVals="first")
+```
+
+
+```{r}
+head(res)
+```
+
+Now there is an extra column in the data that has the symbol for the gene
+
+```{r}
+res$entrez <- mapIds(org.Hs.eg.db,
+                     keys=row.names(res), # Our genenames
+                     keytype="ENSEMBL",        # The format of our genenames
+                     column="ENTREZID",          # The new format we want to add
+                     multiVals="first")
+```
+
+
+
+Let's add two more columns
+
+```{r}
+res$uniprot <- mapIds(org.Hs.eg.db,
+                     keys=row.names(res),
+                     column="UNIPROT",
+                     keytype="ENSEMBL",
+                     multiVals="first")
+
+res$genename <- mapIds(org.Hs.eg.db,
+                     keys=row.names(res),
+                     column="GENENAME",
+                     keytype="ENSEMBL",
+                     multiVals="first")
+```
+
+
+```{r}
+head(res)
+```
+
+
+
+Let's readjust the order
+
+```{r}
+ord <- order( res$padj )
+#View(res[ord,])
+head(res[ord,])
+```
+
+
+
+```{r}
+keytypes(org.Hs.eg.db)
+```
+
+
+## 7. Pathway analysis
+
+The two main databases or gene-sets that folks often start their analysis with are GO and KEGG.
+
+We will use the **gage** package to start with. There are many packages, gage is one of the older ones
+
+```{r}
+library(pathview)
+library(gage)
+library(gageData)
+
+data(kegg.sets.hs)
+
+# Examine the first 2 pathways in this kegg set for humans
+head(kegg.sets.hs, 2)
+```
+
+The main 'gage()' function requires a named vector of fold changes, where the names of the values are the Entrez gene IDs.
+
+
+```{r}
+foldchanges <- res$log2FoldChange
+names(foldchange) <- res$entrez
+```
+
+
+Run gage
+```{r}
+#Get the results
+keggres = gage(foldchanges, gsets=kegg.sets.hs)
+```
+
+What results are returned in what format
+```{r}
+attributes(keggres)
+```
+
+
+
+Have a quick peek at the down-regulated genes in the $less component of our results object.
+```{r}
+head(keggres$less)
+```
+
+
+
+Let's look in more detail at one of these: hsa05310 Asthma with the 'pathview()' function, which will take as input the pathway ID you want and our vector of importance - in our case our fold-changes
+
+```{r}
+pathview(gene.data=foldchanges, pathway.id="hsa05310")
+```
+
+![The Asthma pathway with our genes](hsa05310.pathview.png)
+
+
+
+
+
+
+
+
+
+
+
+
